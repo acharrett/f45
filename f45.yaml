@@ -1,0 +1,19 @@
+imap:
+  server: 'imap_server'
+  username: 'imap_username'
+  password: 'imap_password'
+  # the imap folder the f45 workout reports arrive in
+  reports_folder: 'f45'
+  # the imap folder to move processed f45 workout reports to
+  done_folder: 'f45done'
+
+db:
+  table: 'f45_workouts'
+  host: 'localhost'
+  user: 'db_username'
+  password: 'db_password'
+  dbname: 'db_name'
+
+aws:
+  # Your AWS bucket that the report will be uploaded to for textract to access
+  bucket: 'your_bucket_name'
