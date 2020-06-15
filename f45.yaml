@@ -17,3 +17,10 @@ db:
 aws:
   # Your AWS bucket that the report will be uploaded to for textract to access
   bucket: 'your_bucket_name'
+
+report:
+  sender_email: 'f45bot@example.com'
+  sender_name: 'F45 Bot'
+  recipient_email: 'report.to@example.com'
+  recipient_name: 'Recipient Name'
+  smtp_server: 'smtp.server'
