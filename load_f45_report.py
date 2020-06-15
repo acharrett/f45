@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
 
-import boto3
 import urllib.request, urllib.error, urllib.parse
 import re
 from time import sleep
 from datetime import datetime, timedelta
 from pprint import pprint
-from sys import exit
-import MySQLdb
-import os
 import imaplib
-import sys
+import MySQLdb
 import yaml
+import boto3
 
 def main():
     config_file = 'f45.yaml'
@@ -20,11 +17,11 @@ def main():
         f45_config = yaml.safe_load(f)
 
     imap = imaplib.IMAP4_SSL(f45_config['imap']['server'])
-    imap.login(f45_config['imap']['username'],f45_config['imap']['password'])
+    imap.login(f45_config['imap']['username'], f45_config['imap']['password'])
     imap.select(f45_config['imap']['reports_folder'])
 
-    cur,db = db_connect(f45_config)
-    table_name=f45_config['db']['table']
+    cur, db = db_connect(f45_config)
+    table_name = f45_config['db']['table']
 
     tmp, mailbox_data = imap.search(None, 'ALL')
 #    pprint(mailbox_data)
@@ -34,19 +31,18 @@ def main():
 
         image_url = get_workout_from_email(mail)
         print(image_url)
-        workout_exists = does_workout_exist_in_db(cur,table_name,image_url)
+        workout_exists = does_workout_exist_in_db(cur, table_name, image_url)
 
-        if workout_exists is False: 
-            workout_info = process_image(image_url,f45_config)
-            add_workout_to_db(cur,db,table_name,workout_info)
+        if workout_exists is False:
+            workout_info = process_image(image_url, f45_config)
+            add_workout_to_db(cur, db, table_name, workout_info)
         else:
           # move the mail to the f45done folder
             print('move ' + str(msg_uid))
 #            result = imap.uid('COPY', msg_uid, 'f45done')
-            result = imap.copy(msg_uid,f45_config['imap']['done_folder'])
+            result = imap.copy(msg_uid, f45_config['imap']['done_folder'])
             pprint(result)
             if result[0] == 'OK':
-#                mov, data = imap.uid('STORE', msg_uid , '+FLAGS', '(\Deleted)')
                 imap.store(msg_uid, '+FLAGS', '\\Deleted')
                 imap.expunge()
 
@@ -54,13 +50,11 @@ def main():
 
     imap.close()
 
-def process_image(image_url,f45_config):
+def process_image(image_url, f45_config):
     f45_bucket = image_url.split("/")[2].split(".")[0]
     print("bucket is " + f45_bucket)
-    workout_image = re.sub('^.*amazonaws.com/','',image_url)
+    workout_image = re.sub('^.*amazonaws.com/', '', image_url)
     print("image is " + workout_image)
-#    print(f45_bucket)
-#    print(workout_image)
     s3 = boto3.client('s3')
     s3_resource = boto3.resource('s3')
 
@@ -83,7 +77,7 @@ def process_image(image_url,f45_config):
         region_name = 'us-east-1'
 
     print("Processing in " + region_name)
-    textract = boto3.client('textract',region_name=region_name)
+    textract = boto3.client('textract', region_name=region_name)
     resp = textract.start_document_text_detection(DocumentLocation={'S3Object': {'Bucket': f45_bucket,'Name': workout_image}})
 
     print(("Job ID is " + resp['JobId']))
@@ -107,10 +101,6 @@ def process_image(image_url,f45_config):
             print((str(ct) + " " + block['Text']))
             ct += 1
 
-#    workout_time = datetime.strptime(ocr_text[3],"%I:%M%p - %a %d %b %Y")
-#
-    #pprint(workout_time)
-
     workout_info = {}
     workout_date = find_date(ocr_text)
     workout_info['name'] = find_workout_name(ocr_text)
@@ -129,17 +119,17 @@ def process_image(image_url,f45_config):
     return workout_info
 
 def find_mins(ocr_text):
-    ct=0
-    mins=0
+    ct = 0
+    mins = 0
     for txt in ocr_text:
         if txt == 'Mins':
-           mins=int(ocr_text[ct - 1])
+            mins = int(ocr_text[ct - 1])
         ct += 1
     return mins
 
 def find_date(ocr_text):
-    days = [ 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun' ]
-    months = [ 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec' ]
+    days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     date = ""
     for txt in ocr_text:
         if any(x in txt for x in days) and any(x in txt for x in months):
@@ -149,32 +139,32 @@ def find_date(ocr_text):
     time_needs_adjusting = False
 
     if date == "":
-        ct=0
+        ct = 0
         for txt in ocr_text:
             if (txt.endswith("AM") or txt.endswith("PM")) and ":" in txt:
-               if '/' in txt:
-                   time_needs_adjusting = True
-                   date = txt
-                   if '-' in txt:
-                       date_format = "%m/%d/%Y - %I:%M:%S %p"
-                   else:
-                       date_format = "%m/%d/%Y %I:%M:%S %p"
-               else:
-                   date = txt
-                   date += " "
-                   date += ocr_text[ct + 1]
-                   date += " "
-                   date += ocr_text[ct + 2]
-                   date += " "
-                   date += ocr_text[ct + 3]
-                   date += " "
-                   date += ocr_text[ct + 4]
-                   date += " "
-                   date += ocr_text[ct + 5]
-                   date_format = "%I:%M%p - %a %d %b %Y"
+                if '/' in txt:
+                    time_needs_adjusting = True
+                    date = txt
+                    if '-' in txt:
+                        date_format = "%m/%d/%Y - %I:%M:%S %p"
+                    else:
+                        date_format = "%m/%d/%Y %I:%M:%S %p"
+                else:
+                    date = txt
+                    date += " "
+                    date += ocr_text[ct + 1]
+                    date += " "
+                    date += ocr_text[ct + 2]
+                    date += " "
+                    date += ocr_text[ct + 3]
+                    date += " "
+                    date += ocr_text[ct + 4]
+                    date += " "
+                    date += ocr_text[ct + 5]
+                    date_format = "%I:%M%p - %a %d %b %Y"
             elif ("AM -" in txt) or ("PM -" in txt):
-                   date = txt
-                   date_format = "%I:%M%p - %a %d %b %Y"
+                date = txt
+                date_format = "%I:%M%p - %a %d %b %Y"
 
             print("DATE " + date + " " + date_format)
             ct += 1
@@ -188,34 +178,34 @@ def find_date(ocr_text):
     return workout_time
 
 def find_heartrate(ocr_text):
-    heartrate=0
+    heartrate = 0
     for txt in ocr_text:
         if txt.startswith('AVE') and txt.endswith('BPM'):
             print(txt)
-            heartrate=txt.split(" ")[1]
-        elif re.match('[0-9][0-9][0-9]BPM',txt):
-            heartrate=txt.rstrip('BPM')
+            heartrate = txt.split(" ")[1]
+        elif re.match('[0-9][0-9][0-9]BPM', txt):
+            heartrate = txt.rstrip('BPM')
 
     if heartrate == 0:
-        ct=0
+        ct = 0
         for txt in ocr_text:
             if txt == "BPM":
                 print("HR1 " + txt)
                 print("HR2 " + ocr_text[ct])
                 print("HR3 " + ocr_text[ct - 1])
                 heartrate = ocr_text[ct - 1].split(" ")[-1].rstrip('B')
- 
+
             ct += 1
 
     return heartrate
 
 def find_calories(ocr_text):
-    calories="0"
-    ct=0
+    calories = "0"
+    ct = 0
 
     for txt in ocr_text:
         if calories == "0":
-            if re.match('[0-9]+[Cc]al?$',txt):
+            if re.match('[0-9]+[Cc]al?$', txt):
                 calories = txt.rstrip('Ca').rstrip('Cal').rstrip('cal')
             elif txt == 'Cal' and ocr_text[ct - 1] == 'AVE':
                 calories = ocr_text[ct - 2]
@@ -224,52 +214,52 @@ def find_calories(ocr_text):
 
         ct += 1
 
-    return calories 
+    return calories
 
 def find_points(ocr_text):
-    points=0
+    points = 0
 
     for txt in ocr_text:
-        if re.match('[0-9][0-9]\.[0-9][ ]?[a-zA-Z]*$',txt):
-           print("POINTS " + txt)
-           points = txt.rstrip('pts').rstrip('p').rstrip('F')
+        if re.match(r'[0-9][0-9]\.[0-9][ ]?[a-zA-Z]*$', txt):
+            print("POINTS " + txt)
+            points = txt.rstrip('pts').rstrip('p').rstrip('F')
 
-    return points 
+    return points
 
 def find_workout_name(ocr_text):
     workout_name = ""
 
     for txt in ocr_text:
         if workout_name == "":
-            if re.match('^([0-9] )?[A-Z][a-z]+?',txt) or txt == 'MVP' or txt == '22' or txt == 'T10':
+            if re.match('^([0-9] )?[A-Z][a-z]+?', txt) or txt == 'MVP' or txt == '22' or txt == 'T10':
                 workout_name = txt
                 if workout_name == 'Wists':
                     workout_name = 'Mkatz'
 
-    workout_name = workout_name.replace('circuit','Circuit')
+    workout_name = workout_name.replace('circuit', 'Circuit')
 
     return workout_name
 
 def get_workout_from_email(email_contents):
-    image_url="unknown"
+    image_url = "unknown"
     email_str = ""
     for chunk in email_contents:
-         email_str += str(chunk)
+        email_str += str(chunk)
 
 #    email_fh=open(email_file,'r')
 #    email_contents=email_fh.read()
 #    print email_contents
-    email_parts=email_str.split('"')
+    email_parts = email_str.split('"')
 
     opener = urllib.request.build_opener(NoRedirect)
 
     for email_part in email_parts:
         if 'charturl' in email_part or 'f45graphs' in email_part:
-            charturl=email_part.replace('=\\r\\n','')
+            charturl = email_part.replace('=\\r\\n', '')
             print(charturl)
 
-            if 'charturl' in charturl:   
-                response=opener.open(charturl)
+            if 'charturl' in charturl:
+                response = opener.open(charturl)
                 if response.code == 302:
                     image_url = response.headers['Location']
             else:
@@ -280,31 +270,31 @@ def get_workout_from_email(email_contents):
 def db_connect(f45_config):
     try:
         db = MySQLdb.connect(host=f45_config['db']['host'],
-                            user=f45_config['db']['user'],
-                            passwd=f45_config['db']['password'],
-                            db=f45_config['db']['dbname'])
+                             user=f45_config['db']['user'],
+                             passwd=f45_config['db']['password'],
+                             db=f45_config['db']['dbname'])
 
     except MySQLdb.Error as e:
         print("Error %d: %s" % (e.args[0], e.args[1]))
 
     cur = db.cursor()
-    return cur,db
+    return cur, db
 
-def does_workout_exist_in_db(cur,table_name,image_url):
+def does_workout_exist_in_db(cur, table_name, image_url):
     exists = False
-    select_sql="SELECT id FROM " + table_name + " WHERE image_url='" + image_url + "'"
+    select_sql = "SELECT id FROM " + table_name + " WHERE image_url='" + image_url + "'"
     try:
         cur.execute(select_sql)
     except Exception as e:
         print(repr(e))
 
-    for (id) in cur:
+    for id in cur:
         exists = True
 
     return exists
 
-def add_workout_to_db(cur,db,table_name,workout_info):
-    insert_sql='INSERT into ' + table_name + ' (date_time,day_of_week,calories,points,workout_name,elapsed_seconds,average_heartrate,weight_band,image_url) VALUES ('
+def add_workout_to_db(cur, db, table_name, workout_info):
+    insert_sql = 'INSERT into ' + table_name + ' (date_time,day_of_week,calories,points,workout_name,elapsed_seconds,average_heartrate,weight_band,image_url) VALUES ('
     insert_sql += "'" + workout_info['time'].strftime("%Y-%m-%d %H:%M:%S") + "',"
     insert_sql += "'" + workout_info['day_of_week'] + "',"
     insert_sql += "'" + workout_info['calories'] + "',"
